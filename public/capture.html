@@ -35,6 +35,16 @@
   #meter { height: 12px; background: #0e1216; border-radius: 6px; overflow: hidden; border: 1px solid #333e4a; }
   #meterFill { height: 100%; width: 0%; background: linear-gradient(90deg, #2fbf6a 0 62%, #e0a92b 62% 85%, #d04a2a 85%); transition: width 60ms linear; }
   .hint { font-size: 12px; color: #8b97a5; margin-top: 6px; }
+  .pick { display: flex; gap: 10px; flex-wrap: wrap; }
+  .pick label {
+    display: flex; align-items: center; gap: 9px; cursor: pointer;
+    background: #0e1216; border: 1px solid #333e4a; border-radius: 8px;
+    padding: 11px 16px; margin: 0; font-size: 15px; text-transform: none;
+    letter-spacing: 0; color: #e7ecf2; font-weight: 600;
+  }
+  .pick label.on { border-color: #FDB913; color: #FDB913; }
+  .pick label.locked { opacity: 0.55; cursor: default; }
+  .pick input { width: auto; accent-color: #FDB913; }
   #monitors { display: flex; gap: 14px; flex-wrap: wrap; }
   .lang {
     flex: 1 1 300px; background: #0e1216; border: 1px solid #29323c;
@@ -75,6 +85,12 @@
         <div class="hint" id="levelHint">&mdash;</div>
       </div>
     </div>
+  </div>
+
+  <div class="card">
+    <label>Caption languages for this hall</label>
+    <div id="langPick" class="pick"><em style="color:#6c7885">loading…</em></div>
+    <div class="hint" id="langHint">Each language is a separate translation stream and is billed separately. Turn off one you have no audience for.</div>
   </div>
 
   <div class="card">
@@ -264,7 +280,10 @@ if (window.SPEECH_SDK_FALLBACK && (new URLSearchParams(location.search).get('pro
   async function startRecognizer() {
     cfg = await fetchToken()
     $('providerBadge').textContent = cfg.provider
-    targets = (cfg.targetLanguages && cfg.targetLanguages.length) ? cfg.targetLanguages : ['en']
+    const configured = (cfg.targetLanguages && cfg.targetLanguages.length) ? cfg.targetLanguages : ['en']
+    if (!available.length) loadSelection(configured)
+    targets = configured.filter((l) => selected.has(l))
+    if (!targets.length) throw new Error('No caption language selected.')
     buildMonitors(targets)
 
     if (cfg.provider === 'soniox') {
@@ -290,7 +309,14 @@ if (window.SPEECH_SDK_FALLBACK && (new URLSearchParams(location.search).get('pro
     setRec('live', 'recognizing')
     log(`recognizer started (${cfg.provider}, ${targets.join(' + ')})`)
     publish({ type: 'status', state: 'started', provider: cfg.provider })
-    for (const lang of targets) publish({ type: 'status', state: 'session', targetLang: lang, live: true })
+    // Report every configured language, not just the running ones — a language
+    // switched off on purpose must read as OFF on the console, never as a
+    // failure the lead should be chasing.
+    for (const lang of configured) {
+      const on = selected.has(lang)
+      publish({ type: 'status', state: 'session', targetLang: lang, live: on, enabled: on })
+    }
+    lockPicker(true)
 
     // Azure auth tokens last ~10 minutes; refresh well inside that. Soniox
     // keys are only used at connect time, so its driver has nothing to refresh.
@@ -503,6 +529,58 @@ if (window.SPEECH_SDK_FALLBACK && (new URLSearchParams(location.search).get('pro
   const LANG_NAMES = { en: 'English', ta: 'தமிழ் Tamil', hi: 'हिन्दी Hindi' }
   const langState = new Map() // lang -> { finals: [], lastTs }
 
+  // ---- which languages this hall streams -----------------------------------
+  //
+  // Every configured language is on by default — the safe direction, since a
+  // language nobody turned on is a room of people staring at a blank screen.
+  // Turning one off is a deliberate act that saves a stream and its cost.
+
+  let available = []
+  const selected = new Set()
+  const storeKey = `captureLangs:${hall}`
+
+  function loadSelection(langs) {
+    available = langs
+    selected.clear()
+    let saved = null
+    try { saved = JSON.parse(localStorage.getItem(storeKey) || 'null') } catch {}
+    for (const l of langs) {
+      if (!Array.isArray(saved) || saved.includes(l)) selected.add(l)
+    }
+    if (!selected.size) for (const l of langs) selected.add(l) // never start with none
+    renderPicker()
+  }
+
+  function renderPicker() {
+    $('langPick').innerHTML = available.map((l) => `
+      <label data-pl="${l}" class="${selected.has(l) ? 'on' : ''}">
+        <input type="checkbox" ${selected.has(l) ? 'checked' : ''} data-lang="${l}">
+        ${escapeHtml(LANG_NAMES[l] || l)}
+      </label>`).join('')
+
+    $('langPick').querySelectorAll('input[data-lang]').forEach((box) => {
+      box.onchange = () => {
+        const l = box.dataset.lang
+        if (box.checked) selected.add(l)
+        else if (selected.size > 1) selected.delete(l)
+        else box.checked = true // at least one language must stay on
+        try { localStorage.setItem(storeKey, JSON.stringify([...selected])) } catch {}
+        renderPicker()
+      }
+    })
+    lockPicker(running)
+  }
+
+  // Changing languages mid-session means tearing down and rebuilding every
+  // stream, so it is a Stop-then-Start action rather than a live toggle.
+  function lockPicker(locked) {
+    $('langPick').querySelectorAll('input[data-lang]').forEach((b) => { b.disabled = locked })
+    $('langPick').querySelectorAll('label[data-pl]').forEach((el) => el.classList.toggle('locked', locked))
+    $('langHint').textContent = locked
+      ? 'Press Stop to change languages.'
+      : 'Each language is a separate translation stream and is billed separately. Turn off one you have no audience for.'
+  }
+
   function buildMonitors(langs) {
     langState.clear()
     $('monitors').innerHTML = langs.map((l) => `
@@ -605,6 +683,7 @@ if (window.SPEECH_SDK_FALLBACK && (new URLSearchParams(location.search).get('pro
     } catch (err) {
       running = false
       $('start').disabled = false
+      lockPicker(false)
       setRec('err', 'failed')
       banner(err.message)
       log('start failed: ' + err.message)
@@ -615,8 +694,10 @@ if (window.SPEECH_SDK_FALLBACK && (new URLSearchParams(location.search).get('pro
     running = false
     $('stop').disabled = true
     await stopRecognizer()
+    for (const l of targets) publish({ type: 'status', state: 'session', targetLang: l, live: false })
     setRec('', 'stopped')
     $('start').disabled = false
+    lockPicker(false)
     log('stopped by operator')
   }
 
@@ -630,12 +711,18 @@ if (window.SPEECH_SDK_FALLBACK && (new URLSearchParams(location.search).get('pro
   // Show the engine before Start is pressed, so a minder can see at a glance
   // that this hall is on the one the run sheet says it should be.
   $('providerBadge').textContent = providerOverride || '…'
-  if (!providerOverride) {
-    fetch(BASE + 'api/config')
-      .then((r) => r.json())
-      .then((c) => { $('providerBadge').textContent = c.provider || '?' })
-      .catch(() => { $('providerBadge').textContent = '?' })
-  }
+  fetch(BASE + 'api/config')
+    .then((r) => r.json())
+    .then((c) => {
+      if (!providerOverride) $('providerBadge').textContent = c.provider || '?'
+      // The picker has to be usable before Start, so the language list comes
+      // from the open config endpoint rather than waiting for a token.
+      loadSelection((c.targetLanguages && c.targetLanguages.length) ? c.targetLanguages : ['en'])
+    })
+    .catch(() => {
+      if (!providerOverride) $('providerBadge').textContent = '?'
+      $('langPick').innerHTML = '<em style="color:#8b97a5">could not reach the relay</em>'
+    })
 })()
 </script>
 </body>

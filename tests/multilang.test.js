@@ -92,6 +92,29 @@ const texts = (ws, t) => ws.received.filter((m) => m.type === t).map((m) => m.te
   check('english session unaffected by the tamil failure', enHealth.live === true)
   check('per-language screen counts are reported', taHealth.screens === 2 && enHealth.screens === 2,
     `ta=${taHealth.screens} en=${enHealth.screens}`)
+  check('a session that merely died is still marked enabled', taHealth.enabled === true,
+    'otherwise a real failure would be shown as OFF and ignored')
+
+  // A language switched off on purpose must not read as a fault.
+  pub.send(JSON.stringify({ type: 'status', state: 'session', targetLang: 'ta', live: false, enabled: false }))
+  await sleep(300)
+  const h2 = [...op.received].reverse().find((m) => m.type === 'health')
+    .halls.find((h) => h.hallId === 'hall-1').languages.find((l) => l.lang === 'ta')
+  check('a deselected language reports enabled=false', h2.enabled === false)
+  check('deselecting one language leaves the other enabled',
+    [...op.received].reverse().find((m) => m.type === 'health')
+      .halls.find((h) => h.hallId === 'hall-1').languages.find((l) => l.lang === 'en').enabled === true)
+
+  // Screens for a deselected language must still connect — viewers may already
+  // be sitting on that URL, and they should wait quietly, not see an error.
+  const taOff = await open('role=screen&hall=hall-1&lang=ta')
+  await sleep(200)
+  check('screens still connect for a deselected language',
+    taOff.received.some((m) => m.type === 'hello'))
+  taOff.close()
+
+  pub.send(JSON.stringify({ type: 'status', state: 'session', targetLang: 'ta', live: true, enabled: true }))
+  await sleep(250)
 
   // --- THE SAFETY TEST: blank must cover every language ---------------------
   const enBefore = texts(en, 'final').length

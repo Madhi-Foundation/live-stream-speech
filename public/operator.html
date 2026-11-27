@@ -46,6 +46,7 @@
     border-radius: 7px; padding: 10px 12px;
   }
   .lrow.dead { border-color: #7a3520; }
+  .lrow.off { opacity: 0.45; }
   .lhead { display: flex; align-items: center; gap: 8px; font-size: 12px; color: #8b97a5; margin-bottom: 7px; }
   .lname { font-weight: 700; letter-spacing: 0.08em; text-transform: uppercase; color: #c7d0da; }
   .lage { margin-left: auto; }
@@ -233,15 +234,21 @@
     for (const lh of h.languages || []) {
       const row = el.querySelector(`[data-lrow="${lh.lang}"]`)
       if (!row) continue
+      // Switched off on purpose is not a fault. Only an ENABLED language that
+      // is not producing deserves red — otherwise the console cries wolf and
+      // the lead learns to ignore it.
+      const off = lh.enabled === false
       const stale = lh.lastCaptionAgeMs !== null && lh.lastCaptionAgeMs > 25000
-      const down = h.publisherLive && (!lh.live || stale)
+      const down = h.publisherLive && !off && (!lh.live || stale)
       row.classList.toggle('dead', down)
+      row.classList.toggle('off', off)
       row.querySelector('[data-ldot]').className =
-        'dot ' + (!h.publisherLive ? '' : down ? 'err' : lh.lastCaptionAgeMs === null ? 'warn' : 'live')
+        'dot ' + (off || !h.publisherLive ? '' : down ? 'err' : lh.lastCaptionAgeMs === null ? 'warn' : 'live')
       row.querySelector('[data-lscreens]').textContent = lh.screens
 
       const la = row.querySelector('[data-lage]')
-      if (!lh.live && h.publisherLive) la.textContent = 'SESSION DOWN'
+      if (off) la.textContent = 'OFF — not selected in this hall'
+      else if (!lh.live && h.publisherLive) la.textContent = 'SESSION DOWN'
       else if (lh.lastCaptionAgeMs === null) la.textContent = 'no captions yet'
       else {
         const s2 = Math.round(lh.lastCaptionAgeMs / 1000)

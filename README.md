@@ -60,6 +60,13 @@ original text for the English half, and `ta` does the mirror image.
 `4 halls × 2 languages = 8 concurrent streams`. Confirm the account allows that before adding a
 third language. Azure does every target in one session, so it does not scale this way.
 
+Because of that, the capture page lets each hall choose which languages it actually streams. All of
+them are on by default — a language nobody remembered to switch on is a room of people watching a
+blank screen — but a hall with no Tamil audience can turn Tamil off and stop paying for that stream.
+The choice is remembered per hall, and is locked while captions are running: changing it rebuilds
+every session, so it is a Stop-then-Start action. A language switched off shows as **OFF** on the
+operator console, greyed rather than red, so it is never confused with one that has died.
+
 Blank, Freeze and Clear are deliberately **hall-wide, across every language**. Blanking English
 while the Tamil screens keep showing the same sentence would defeat the point of the button.
 
@@ -271,6 +278,7 @@ reconnect storms when the relay restarts (viewers back off with jitter for exact
       produces output in **both** targets
 - [ ] Soniox concurrency limit confirmed for `halls × languages` simultaneous streams
 - [ ] Blank pressed once with both an `en` and a `ta` screen open — **both** go dark
+- [ ] Every hall's capture page has the right languages ticked, and both panels are moving
 - [ ] Per-hall kit: laptop, USB interface, XLR, hotspot pre-paired and failover tested
 - [ ] Mixer line-out confirmed in every hall — never a room mic; peaks near −12 dBFS
 - [ ] Legibility checked from the back row of each hall

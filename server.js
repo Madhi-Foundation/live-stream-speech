@@ -80,7 +80,9 @@ for (const id of HALLS) {
     partial: new Map(TARGET_LANGS.map((l) => [l, ''])),
     // One publisher per hall, but N sessions inside it. Without per-language
     // health a dead Tamil session is invisible: the publisher is still live.
-    langHealth: new Map(TARGET_LANGS.map((l) => [l, { live: false, lastCaptionTs: 0 }])),
+    // `enabled` separates "the hall chose not to run this language" from
+    // "this language died" — the console must never cry wolf about the first.
+    langHealth: new Map(TARGET_LANGS.map((l) => [l, { live: false, enabled: true, lastCaptionTs: 0 }])),
     blanked: false,
     frozen: false,
     lastCaptionTs: 0,
@@ -270,8 +272,10 @@ wss.on('connection', (ws, req) => {
       if (hall.publisher === ws) {
         hall.publisher = null
         hall.provider = null
-        // Every language session died with the page that hosted them.
-        for (const h of hall.langHealth.values()) h.live = false
+        // Every language session died with the page that hosted them. Reset
+        // `enabled` too, so a hall that was deliberately running one language
+        // does not look permanently half-configured after the page closes.
+        for (const h of hall.langHealth.values()) { h.live = false; h.enabled = true }
       }
       console.log(`[ws] publisher gone: ${hallId}`)
       broadcastHealth()
@@ -370,7 +374,9 @@ function handlePublisherMessage(ws, hall, raw) {
     // Per-session liveness. One publisher hosts N language sessions; without
     // this a dead Tamil session hides behind a live publisher dot.
     if (msg.state === 'session' && hall.langHealth.has(String(msg.targetLang || '').toLowerCase())) {
-      hall.langHealth.get(String(msg.targetLang).toLowerCase()).live = Boolean(msg.live)
+      const h = hall.langHealth.get(String(msg.targetLang).toLowerCase())
+      h.live = Boolean(msg.live)
+      if ('enabled' in msg) h.enabled = Boolean(msg.enabled)
       broadcastHealth()
     }
     toOperators(hall, { type: 'publisher_status', hallId: ws.hallId, ...msg, ts: Date.now() })
@@ -511,6 +517,7 @@ function healthSnapshot() {
           lang: l,
           screens: hall.screens.get(l).size,
           live: h.live,
+          enabled: h.enabled,
           lastCaptionAgeMs: h.lastCaptionTs ? now - h.lastCaptionTs : null,
         }
       }),

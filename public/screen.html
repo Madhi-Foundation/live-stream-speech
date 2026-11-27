@@ -3,53 +3,70 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
-<meta name="theme-color" content="#000000">
+<meta name="theme-color" content="#024063">
 <title>Captions</title>
 <style>
   :root {
     --size: 52px;
-    --brand: #FDB913;
+    --bg: #024063;
+    --text: #FFFFFF;
     --pad-x: max(4vw, env(safe-area-inset-left));
+    /* Both logos share one height so neither brand outweighs the other. */
+    --logo-h: clamp(34px, 5.2vh, 64px);
   }
   * { box-sizing: border-box; margin: 0; padding: 0; }
-  html, body { height: 100%; background: #000; overflow: hidden; }
+  html, body { height: 100%; background: var(--bg); overflow: hidden; }
   body {
     /* dvh so mobile browser chrome collapsing does not clip the last line */
     height: 100dvh;
     font-family: "Noto Sans", "Segoe UI", system-ui, -apple-system, sans-serif;
-    color: #fff;
+    color: var(--text);
     display: flex;
     flex-direction: column;
     -webkit-text-size-adjust: 100%;
   }
   body.idle { cursor: none; }
 
-  /* ---- top bar: brand left, standing disclaimer right ------------------- */
+  /* ---- top bar: "powered by" left, event logo centre, disclaimer right --- */
   #bar {
     flex: 0 0 auto;
-    display: flex; align-items: flex-start; justify-content: space-between; gap: 12px;
+    display: grid; grid-template-columns: 1fr auto 1fr;
+    grid-template-areas: "brand event notice";
+    align-items: center; gap: 12px;
     padding: max(2.2vh, env(safe-area-inset-top)) var(--pad-x) 0;
   }
-  #brand {
-    /* The logo is dark artwork; on a black wall it needs its own light ground
-       rather than a filter, which would wreck the brand colour. */
-    background: #fff; border-radius: 8px; padding: 5px 9px;
-    display: inline-flex; align-items: center;
+  #event { grid-area: event; display: block; height: calc(var(--logo-h) * 0.85); width: auto; }
+  #brandWrap { grid-area: brand; display: flex; align-items: center; gap: 10px; min-width: 0; }
+  #brand { display: inline-flex; align-items: center; gap: 0.6em; }
+  #brand small {
+    font-size: clamp(10px, 1.3vh, 16px); font-weight: 600; opacity: 0.9;
+    letter-spacing: 0.08em; text-transform: uppercase; white-space: nowrap;
   }
-  #brand img { display: block; height: clamp(20px, 3.2vh, 42px); width: auto; }
-  #brandWrap { display: flex; align-items: center; gap: 10px; min-width: 0; }
+  /* Madhi keeps its own black-and-yellow artwork, so it sits on a white tile
+     the same height as the event logo — no recolouring of the brand. */
+  #brand span {
+    display: inline-flex; align-items: center; height: var(--logo-h);
+    background: #fff; border-radius: 8px; padding: calc(var(--logo-h) * 0.12) calc(var(--logo-h) * 0.2);
+  }
+  #brand img { display: block; height: 100%; width: auto; }
   /* Setup aid — deliberately unobtrusive during the event. */
   #label {
     font-size: clamp(11px, 1.5vh, 18px); font-weight: 700; letter-spacing: 0.14em;
-    text-transform: uppercase; color: var(--brand); opacity: 0.75; display: none;
+    text-transform: uppercase; color: var(--text); opacity: 0.75; display: none;
   }
   body.labelled #label { display: block; }
   /* Legible to anyone who looks for it, out of the way of anyone reading. */
   #notice {
     font-size: clamp(11px, 1.45vh, 19px);
     font-weight: 600; letter-spacing: 0.03em; line-height: 1.35;
-    color: var(--brand); opacity: 0.85;
-    text-align: right; max-width: 46%;
+    color: var(--text); opacity: 0.85;
+    grid-area: notice; justify-self: end; text-align: right;
+  }
+  /* Phones: three across does not fit — event logo on its own row on top. */
+  @media (max-width: 720px) {
+    #bar { grid-template-columns: 1fr 1fr; grid-template-areas: "event event" "brand notice"; row-gap: 1.6vh; }
+    #event { justify-self: center; }
+    :root { --logo-h: 34px; }
   }
 
   /* ---- captions --------------------------------------------------------- */
@@ -67,9 +84,9 @@
   }
   .line { margin-top: 0.32em; transition: opacity 140ms linear; }
   .line:first-child { margin-top: 0; }
-  /* The live, still-settling line — brand yellow so it reads as distinct from
-     the committed white lines above it. */
-  .partial { color: var(--brand); }
+  /* The live, still-settling line — slightly softer so it reads as distinct
+     from the committed lines above it. */
+  .partial { opacity: 0.8; }
   #captions.blanked { visibility: hidden; }
 
   /* ---- status + touch affordances --------------------------------------- */
@@ -89,11 +106,11 @@
     min-width: 44px; height: 44px; padding: 0 14px;   /* 44px: a real touch target */
     display: inline-flex; align-items: center; justify-content: center;
     background: rgba(255,255,255,0.07); border: 1px solid rgba(255,255,255,0.16);
-    border-radius: 10px; color: var(--brand); font: inherit; font-size: 15px;
+    border-radius: 10px; color: var(--text); font: inherit; font-size: 15px;
     font-weight: 700; line-height: 1;
     cursor: pointer; -webkit-tap-highlight-color: transparent;
   }
-  #tools button.on { background: var(--brand); color: #000; border-color: var(--brand); }
+  #tools button.on { background: var(--text); color: var(--bg); border-color: var(--text); }
   #full { display: none; font-size: 19px; }
   /* Touch devices only — a hall TV should show no chrome at all. */
   @media (hover: none) and (pointer: coarse) { #full { display: inline-flex !important; } }
@@ -106,7 +123,7 @@
     border: 3px solid #d04a2a; border-radius: 14px; max-width: 88vw;
   }
   #fatal h1 { font-size: clamp(30px, 7vw, 68px); color: #ff6a45; letter-spacing: 0.04em; }
-  #fatal p { font-size: clamp(15px, 2.6vw, 26px); color: #98a2ad; margin-top: 18px; line-height: 1.5; }
+  #fatal p { font-size: clamp(15px, 2.6vw, 26px); color: rgba(255,255,255,0.75); margin-top: 18px; line-height: 1.5; }
   body.fatal #captions, body.fatal #dot, body.fatal #bar, body.fatal #tools { display: none; }
   body.fatal #fatal { display: block; }
 
@@ -114,16 +131,17 @@
   @media (orientation: landscape) and (max-height: 460px) {
     #bar { padding-top: 1vh; }
     #captions { padding-bottom: 2vh; }
-    #brand img { height: 20px; }
+    :root { --logo-h: 26px; }
   }
 </style>
 </head>
 <body>
   <header id="bar">
     <div id="brandWrap">
-      <span id="brand"><img src="assets/madhi_black_logo_4e0551fa8d.png" alt="Madhi"></span>
+      <span id="brand"><small>Powered by</small><span><img src="assets/madhi_black_logo_4e0551fa8d.png" alt="Madhi"></span></span>
       <span id="label"></span>
     </div>
+    <img id="event" src="assets/vvf_logo_white.png" alt="Vidhya Vidhai Foundation">
     <div id="notice">AI-generated translation &middot; may contain errors</div>
   </header>
 
